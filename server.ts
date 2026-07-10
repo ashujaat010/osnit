@@ -1,6 +1,5 @@
 import express from "express";
 import * as path from "path";
-import { createServer as createViteServer } from "vite";
 import * as dotenv from "dotenv";
 
 // Load environment configurations
@@ -321,6 +320,7 @@ async function startServer() {
 
   // Vite middleware for development (disabled in serverless environments like Vercel)
   if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

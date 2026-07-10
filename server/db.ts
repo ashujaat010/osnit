@@ -25,6 +25,15 @@ let memoryDB: DatabaseSchema = {
   logs: []
 };
 
+// Eagerly try to seed memoryDB from bundled db.json on load
+try {
+  const seedPath = path.join(process.cwd(), "database", "db.json");
+  if (fs.existsSync(seedPath)) {
+    const rawSeed = fs.readFileSync(seedPath, "utf8");
+    memoryDB = JSON.parse(rawSeed);
+  }
+} catch (_) {}
+
 let useMemoryDB = false;
 
 // Ensure the database directory exists and initialize file
@@ -34,11 +43,23 @@ function initDatabase() {
       fs.mkdirSync(DB_DIR, { recursive: true });
     }
     if (!fs.existsSync(DB_FILE)) {
-      const initialData: DatabaseSchema = {
+      let initialData: DatabaseSchema = {
         users: [],
         scans: [],
         logs: [],
       };
+      
+      // Try to load pre-seeded data if it exists in the bundled code
+      const seedPath = path.join(process.cwd(), "database", "db.json");
+      if (fs.existsSync(seedPath)) {
+        try {
+          const rawSeed = fs.readFileSync(seedPath, "utf8");
+          initialData = JSON.parse(rawSeed);
+        } catch (seedErr) {
+          console.error("Failed to read seed db file:", seedErr);
+        }
+      }
+      
       fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2), "utf8");
       memoryDB = initialData;
     }

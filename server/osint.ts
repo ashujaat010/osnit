@@ -8,6 +8,21 @@ import {
   ScanRecord 
 } from "../src/types";
 
+// Simple, memory-safe promise timeout utility to guarantee fast execution in serverless contexts
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  const timeoutPromise = new Promise<T>(resolve => {
+    timeoutId = setTimeout(() => resolve(fallback), timeoutMs);
+  });
+  return Promise.race([
+    promise.then(result => {
+      clearTimeout(timeoutId);
+      return result;
+    }),
+    timeoutPromise
+  ]);
+}
+
 // Common disposable email domains list
 const DISPOSABLE_DOMAINS = new Set([
   "mailinator.com", "yopmail.com", "trashmail.com", "tempmail.com", 
@@ -117,12 +132,12 @@ export async function gatherDomainDnsInfo(domain: string): Promise<DomainDnsInfo
 
   // 1. Resolve A Records (Domain Validation check)
   try {
-    const addresses = await dnsPromises.resolve4(cleanDomain);
+    const addresses = await withTimeout(dnsPromises.resolve4(cleanDomain), 1500, [] as string[]);
     result.aRecords = addresses;
   } catch (err) {
     // If we can't find IPv4, try standard resolve
     try {
-      const addresses = await dnsPromises.resolve(cleanDomain);
+      const addresses = await withTimeout(dnsPromises.resolve(cleanDomain), 1500, [] as string[]);
       result.aRecords = addresses.filter(addr => typeof addr === "string") as string[];
     } catch (_) {
       result.aRecords = [];
@@ -131,7 +146,7 @@ export async function gatherDomainDnsInfo(domain: string): Promise<DomainDnsInfo
 
   // 2. Resolve MX Records (Email Delivery check)
   try {
-    const mx = await dnsPromises.resolveMx(cleanDomain);
+    const mx = await withTimeout(dnsPromises.resolveMx(cleanDomain), 1500, [] as any[]);
     result.hasMx = mx.length > 0;
     result.mxRecords = mx
       .sort((a, b) => a.priority - b.priority)
@@ -143,7 +158,7 @@ export async function gatherDomainDnsInfo(domain: string): Promise<DomainDnsInfo
 
   // 3. Resolve TXT, SPF, and DMARC Records
   try {
-    const txt = await dnsPromises.resolveTxt(cleanDomain);
+    const txt = await withTimeout(dnsPromises.resolveTxt(cleanDomain), 1500, [] as string[][]);
     const flatTxt = txt.map(records => records.join(" "));
     result.txtRecords = flatTxt;
 
@@ -158,7 +173,7 @@ export async function gatherDomainDnsInfo(domain: string): Promise<DomainDnsInfo
 
   // Look up DMARC record (usually hosted at _dmarc.domain)
   try {
-    const dmarcTxt = await dnsPromises.resolveTxt(`_dmarc.${cleanDomain}`);
+    const dmarcTxt = await withTimeout(dnsPromises.resolveTxt(`_dmarc.${cleanDomain}`), 1500, [] as string[][]);
     const flatDmarc = dmarcTxt.map(records => records.join(" "));
     const dmarc = flatDmarc.find(record => record.startsWith("v=DMARC1"));
     if (dmarc) {
@@ -172,7 +187,7 @@ export async function gatherDomainDnsInfo(domain: string): Promise<DomainDnsInfo
   // Provides clean, realistic parsed registrar info using DNS defaults
   const nameServers = ["ns1.domaincontrol.com", "ns2.domaincontrol.com"];
   try {
-    const ns = await dnsPromises.resolveNs(cleanDomain);
+    const ns = await withTimeout(dnsPromises.resolveNs(cleanDomain), 1500, [] as string[]);
     if (ns && ns.length > 0) {
       result.whois.nameServers = ns;
     } else {
@@ -223,18 +238,26 @@ export async function performPublicOsint(target: string, isEmail: boolean): Prom
     
     // 1. Check Public GitHub Disclosures using GitHub Search API (Real integration if API is free/unauthenticated)
     try {
-      const gitResponse = await fetch(`https://api.github.com/search/users?q=${encodeURIComponent(targetClean)}`, {
-        headers: { "User-Agent": "aistudio-build-recon-tool" }
-      });
-      if (gitResponse.ok) {
+      const gitResponse = await withTimeout(
+        fetch(`https://api.github.com/search/users?q=${encodeURIComponent(targetClean)}`, {
+          headers: { "User-Agent": "aistudio-build-recon-tool" }
+        }),
+        2000,
+        null
+      );
+      if (gitResponse && gitResponse.ok) {
         const data = await gitResponse.json();
         if (data.items && data.items.length > 0) {
           const userObj = data.items[0];
           // Retrieve detail info
-          const userDetailResponse = await fetch(userObj.url, {
-            headers: { "User-Agent": "aistudio-build-recon-tool" }
-          });
-          if (userDetailResponse.ok) {
+          const userDetailResponse = await withTimeout(
+            fetch(userObj.url, {
+              headers: { "User-Agent": "aistudio-build-recon-tool" }
+            }),
+            2000,
+            null
+          );
+          if (userDetailResponse && userDetailResponse.ok) {
             const details = await userDetailResponse.json();
             result.githubProfile = {
               username: details.login,
@@ -546,7 +569,7 @@ export async function performFullSecurityScan(target: string, type: "email" | "d
     let mxValid = false;
     if (syntaxValid) {
       try {
-        const mx = await dnsPromises.resolveMx(domain);
+        const mx = await withTimeout(dnsPromises.resolveMx(domain), 1500, [] as any[]);
         mxValid = mx.length > 0;
       } catch (_) {
         mxValid = false;
