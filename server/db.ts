@@ -3,7 +3,9 @@ import * as path from "path";
 import * as crypto from "crypto";
 import { User, ScanRecord, AuditLog, DashboardStats } from "../src/types";
 
-const DB_DIR = path.join(process.cwd(), "database");
+const DB_DIR = process.env.VERCEL 
+  ? "/tmp/database" 
+  : path.join(process.cwd(), "database");
 const DB_FILE = path.join(DB_DIR, "db.json");
 
 interface DatabaseSchema {

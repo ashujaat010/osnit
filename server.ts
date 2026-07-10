@@ -25,12 +25,14 @@ import { generateSecurityAnalysis } from "./server/gemini";
 // In-Memory Token Store for simple, highly reliable Bearer Token Sessions
 const ACTIVE_SESSIONS = new Map<string, string>(); // token -> userId
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+const app = express();
 
-  // Middleware to parse incoming bodies
-  app.use(express.json());
+// Export the Express instance as default for Vercel Serverless Function hosting
+export { app };
+export default app;
+
+// Middleware to parse incoming bodies
+app.use(express.json());
 
   // Helper middleware to authenticate request session tokens
   const authenticateToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -313,14 +315,18 @@ async function startServer() {
     res.status(400).json({ error: "Unsupported export format. Supported types: 'json' | 'csv' | 'html'" });
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+// Dev / standalone production server bootstrapper
+async function startServer() {
+  const PORT = 3000;
+
+  // Vite middleware for development (disabled in serverless environments like Vercel)
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
+  } else if (process.env.NODE_ENV === "production" && !process.env.VERCEL) {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
@@ -328,9 +334,11 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Email OSINT Server active on http://0.0.0.0:${PORT}`);
-  });
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Email OSINT Server active on http://0.0.0.0:${PORT}`);
+    });
+  }
 }
 
 // Extend Request type to hold userId dynamically
