@@ -1,0 +1,6 @@
+{
+  "name": "Email Harvesting & OSINT Reconnaissance Tool",
+  "description": "An educational OSINT and defensive email security assessment platform for syntax validation, DNS/SPF/DMARC analysis, WHOIS intelligence, breach awareness, and domain risk scoring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
