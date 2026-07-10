@@ -19,41 +19,70 @@ interface UserRecord extends User {
   salt: string;
 }
 
+let memoryDB: DatabaseSchema = {
+  users: [],
+  scans: [],
+  logs: []
+};
+
+let useMemoryDB = false;
+
 // Ensure the database directory exists and initialize file
 function initDatabase() {
-  if (!fs.existsSync(DB_DIR)) {
-    fs.mkdirSync(DB_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DB_FILE)) {
-    const initialData: DatabaseSchema = {
-      users: [],
-      scans: [],
-      logs: [],
-    };
-    fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2), "utf8");
-    addAuditLogInternal("SYSTEM", "database_initialized", null, null, "success", "Database file initialized at " + DB_FILE);
+  try {
+    if (!fs.existsSync(DB_DIR)) {
+      fs.mkdirSync(DB_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(DB_FILE)) {
+      const initialData: DatabaseSchema = {
+        users: [],
+        scans: [],
+        logs: [],
+      };
+      fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2), "utf8");
+      memoryDB = initialData;
+    }
+  } catch (err) {
+    console.error("Failed to initialize database file. Falling back to memory DB:", err);
+    useMemoryDB = true;
   }
 }
 
 // Read database contents
 function readDB(): DatabaseSchema {
+  if (useMemoryDB) {
+    return memoryDB;
+  }
   initDatabase();
+  if (useMemoryDB) {
+    return memoryDB;
+  }
   try {
     const raw = fs.readFileSync(DB_FILE, "utf8");
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    memoryDB = parsed;
+    return parsed;
   } catch (err) {
-    console.error("Failed to read database file:", err);
-    return { users: [], scans: [], logs: [] };
+    console.error("Failed to read database file, using in-memory store:", err);
+    useMemoryDB = true;
+    return memoryDB;
   }
 }
 
 // Write database contents safely
 function writeDB(data: DatabaseSchema) {
-  initDatabase();
+  memoryDB = data;
+  if (useMemoryDB) {
+    return;
+  }
   try {
+    if (!fs.existsSync(DB_DIR)) {
+      fs.mkdirSync(DB_DIR, { recursive: true });
+    }
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf8");
   } catch (err) {
-    console.error("Failed to write to database file:", err);
+    console.error("Failed to write to database file, using in-memory store:", err);
+    useMemoryDB = true;
   }
 }
 

@@ -90,11 +90,21 @@ export default function ScanForm({ onScanCompleted, authToken }: ScanFormProps) 
         body: JSON.stringify({ target: cleanedTarget, type: scanType })
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || "The server could not process the scan.");
+        let errorMsg = "The server could not process the scan.";
+        try {
+          const text = await response.text();
+          try {
+            const parsed = JSON.parse(text);
+            errorMsg = parsed.error || errorMsg;
+          } catch (_) {
+            errorMsg = `Server error (${response.status}): ${text.substring(0, 150)}`;
+          }
+        } catch (_) {}
+        throw new Error(errorMsg);
       }
+
+      const data = await response.json();
 
       setScanSteps(prev => prev.map(s => ({ ...s, status: "done" as const })));
       setStepMessage("Scan successfully compiled!");
